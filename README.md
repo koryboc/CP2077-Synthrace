@@ -119,6 +119,25 @@ Synthrace/
 
 ---
 
+## 🧩 Public API (for Mod Developers)
+
+Synthrace exposes a small set of playback functions via `GetMod("Synthrace")`.
+
+```lua
+local sr = GetMod("Synthrace")
+if not sr then return end
+
+sr.PlayOnce()       --Plays a random song once.
+sr.PlayOnce(3)      --Plays song #3 of the active playlist once.
+sr.PlayLoop()       --Starts a randomized loop — new track per iteration.
+sr.PlayLoop(3)      --Loops song #3 repeatedly (same track every iteration).
+sr.PlayWinOutro()   --Plays the win outro once (RaceEnd1).
+sr.PlayLossOutro()  --Plays the loss outro once (RaceEnd2).
+sr.StopAll()        --Stops all playback and restores game audio.
+```
+
+---
+
 ## ✔ Requirements
 
 - [Cyberpunk 2077](https://www.gog.com/de/game/cyberpunk_2077) **2.21+**
