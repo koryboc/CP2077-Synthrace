@@ -6,7 +6,7 @@ This file is distributed under the MIT License
 Synthrace - Race Music Overhaul
 
 Filename: init.lua
-Version: 2026-11-08, 14:44 UTC+01:00 (MEZ)
+Version: 2026-11-08, 14:50 UTC+01:00 (MEZ)
 
 Copyright (c) 2026, Roy Bock aka koryboc
 All rights reserved.
@@ -656,8 +656,9 @@ end
 
 ---Retrieves a song from the active audio playlist by index or at random if no index is provided.
 ---@param index integer? # Optional index of the song to retrieve. If omitted, a random song is selected.
+---@param skipIndex integer? # If picking randomly, exclude this index. Ignored when `index` is given or `skipIndex` is out of range.
 ---@return string?, integer # The selected song path and its index, or nil and 0 if no valid song is available.
-local function getSongPath(index)
+local function getSongPath(index, skipIndex)
 	local songs = get(audio.playlist, "songs")
 	if type(songs) ~= "table" or #songs == 0 then
 		return nil, 0
@@ -669,7 +670,14 @@ local function getSongPath(index)
 			index = #songs
 		end
 	else
-		index = random(1, #songs)
+		if type(skipIndex) == "number" and skipIndex >= 1 and skipIndex <= #songs and #songs > 1 then
+			index = random(1, #songs - 1)
+			if index >= skipIndex then
+				index = index + 1
+			end
+		else
+			index = random(1, #songs)
+		end
 	end
 	return songs[index], index
 end
@@ -743,21 +751,13 @@ local function playAudio(path, doRestore)
 	return time
 end
 
----Starts an asynchronous randomized audio loop for continuous race music playback.
-local function playAudioRandomLoop()
-	local path, i
-	for _ = 1, 10 do
-		path, i = getSongPath()
-		if not path then
-			logErr(Text.LOG_PLAYLIST_INVALID)
-			return
-		end
-		if audio.lastLoopIndex ~= i then
-			break
-		end
-	end
+---Starts an asynchronous audio loop for continuous race music playback.
+---@param index integer? # Optional index of the song to retrieve. If omitted, a random song is selected — each call rolls fresh, so looped playback yields a different track per iteration.
+local function playAudioLoop(index)
+	local path, i = getSongPath(index, audio.lastLoopIndex)
+	if type(path) ~= "string" then return end
 
-	audio.lastLoopIndex = i
+	audio.lastLoopIndex = not index and -1 or i
 
 	local delay = playAudio(path) / 1000
 	if delay < 40 then return end
@@ -765,8 +765,14 @@ local function playAudioRandomLoop()
 	audio.isLoopActive = true
 	asyncRepeat(delay, function()
 		if not audio.isLoopActive then return end
-		playAudioRandomLoop()
+		playAudioLoop(index)
 	end)
+end
+
+---Plays the appropriate outro track once.
+---@param isLoosing boolean? # If true plays the loss outro, false or nil plays the win outro.
+local function playOutro(isLoosing)
+	playAudio(isLoosing == true and getLossOutroPath() or getWinOutroPath(), true)
 end
 
 ---Stops all custom playback and restores the previous in-game audio state.
@@ -939,11 +945,11 @@ registerForEvent("onInit", function()
 			return
 		end
 		if mode == vehicleRaceUI.RaceStart then
-			playAudioRandomLoop()
+			playAudioLoop()
 			logInfo(Text.LOG_RACE_STARTED)
 		elseif mode == vehicleRaceUI.RaceEnd then
 			local position = tonumber(Game.GetQuestsSystem():GetFactStr("sq024_current_race_player_position")) or 0
-			playAudio(position > 1 and getLossOutroPath() or getWinOutroPath(), true)
+			playOutro(position > 1)
 			logInfo(Text.LOG_RACE_FINISHED, position)
 		end
 	end)
@@ -1121,14 +1127,14 @@ registerForEvent("onShutdown", reset)
 ---Hotkey that skips to the next random track.
 registerHotkey("synthraceNextHotkey", Text.HK_NEXT, function()
 	if audio.isLoopActive then
-		playAudioRandomLoop()
+		playAudioLoop()
 	end
 end)
 
 ---Input binding that plays the next random track when the assigned key is released.
 registerInput("synthraceNextInput", Text.HK_NEXT, function(down)
 	if not down and audio.isLoopActive then
-		playAudioRandomLoop()
+		playAudioLoop()
 	end
 end)
 
@@ -1139,3 +1145,16 @@ registerHotkey("synthraceStopHotkey", Text.HK_STOP, reset)
 registerInput("synthraceStopInput", Text.HK_STOP, function(down)
 	if not down then reset() end
 end)
+
+--Public API exposed via `GetMod("Synthrace")` for other mods to drive playback.
+return {
+	PlayOne = function(index)
+		local path = getSongPath(index)
+		if type(path) ~= "string" then return end
+		return playAudio(path, true)
+	end,
+	PlayLoop = playAudioLoop,
+	PlayWinOutro  = function() playOutro(false) end,
+	PlayLossOutro = function() playOutro(true) end,
+	StopAll = reset
+}
