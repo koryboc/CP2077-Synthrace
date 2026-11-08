@@ -6,7 +6,7 @@ This file is distributed under the MIT License
 Synthrace - Race Music Overhaul
 
 Filename: init.lua
-Version: 2026-11-08, 14:50 UTC+01:00 (MEZ)
+Version: 2026-11-08, 14:59 UTC+01:00 (MEZ)
 
 Copyright (c) 2026, Roy Bock aka koryboc
 All rights reserved.
@@ -1148,7 +1148,7 @@ end)
 
 --Public API exposed via `GetMod("Synthrace")` for other mods to drive playback.
 return {
-	PlayOne = function(index)
+	PlayOnce = function(index)
 		local path = getSongPath(index)
 		if type(path) ~= "string" then return end
 		return playAudio(path, true)
