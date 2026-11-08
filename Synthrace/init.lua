@@ -6,9 +6,9 @@ This file is distributed under the MIT License
 Synthrace - Race Music Overhaul
 
 Filename: init.lua
-Version: 2025-10-30, 03:30 UTC+01:00 (MEZ)
+Version: 2026-11-08, 14:44 UTC+01:00 (MEZ)
 
-Copyright (c) 2025, Si13n7 Developments(tm)
+Copyright (c) 2026, Roy Bock aka koryboc
 All rights reserved.
 ______________________________________________
 
@@ -45,10 +45,6 @@ Development Environment:
 ---@field addRangeInt fun(path: string, label: string, desc: string, min: integer?, max: integer?, step: integer?, value: integer, default: integer, setValue: fun(value: integer)) # Adds an integer slider or range input to the settings UI, with min/max limits and a value change callback.
 ---@field addButton fun(path: string, label: string?, desc: string, buttonText: string, textSize: number, callback: fun()) # Adds a button element to the settings UI. `label` is optional and can be nil for unlabeled buttons.
 ---@field currentTab string # The path of the currently opened tab, or an empty string if none is active.
-
----Represents the `CyberTrials` CET mod interface, exposing its runtime state.
----@class CyberTrials
----@field raceActive boolean # Indicates whether a CyberTrials race event is currently active.
 
 --Aliases for commonly used standard library functions to simplify code.
 local format, concat, insert, unpack, abs, floor, random, randomseed =
@@ -148,11 +144,7 @@ local refs = {
 
 	---Reference to the `Native Settings UI` CET mod instance, which is optional and only used if available.
 	---@type NativeSettings
-	nativeSettings = nil,
-
-	---Reference to the `CyberTrials` CET mod instance, which is optional and only used if available.
-	---@type CyberTrials
-	cyberTrials = nil
+	nativeSettings = nil
 }
 
 ---Safely retrieves a nested value from a table (e.g., table[one][two][three]).
@@ -946,35 +938,10 @@ registerForEvent("onInit", function()
 			stopAudio()
 			return
 		end
-		local ct = refs.cyberTrials
 		if mode == vehicleRaceUI.RaceStart then
-			if ct.raceActive then
-				ct.curTrackHook = ct.getTrackName()
-				ct.prevTimeHook = ct.getBestTimeHook(ct.curTrackHook)
-			end
 			playAudioRandomLoop()
 			logInfo(Text.LOG_RACE_STARTED)
 		elseif mode == vehicleRaceUI.RaceEnd then
-			if ct.raceActive then
-				local isTraveling = ct.backToStartOnFinishHook()
-				local isCompleted = ct.isRaceCompletedHook()
-
-				stopAudio()
-				muteGlobalVolume()
-
-				audio.isProtected = isCompleted and isTraveling
-				asyncRepeat(1, function(id)
-					if audio.isProtected then return end
-					asyncStop(id)
-
-					local isBestTime = ct.getBestTimeHook(ct.curTrackHook) < ct.prevTimeHook
-					playAudio(isBestTime and getWinOutroPath() or getLossOutroPath(), true)
-				end)
-
-				logInfo(Text.LOG_RACE_ENDED)
-				return
-			end
-
 			local position = tonumber(Game.GetQuestsSystem():GetFactStr("sq024_current_race_player_position")) or 0
 			playAudio(position > 1 and getLossOutroPath() or getWinOutroPath(), true)
 			logInfo(Text.LOG_RACE_FINISHED, position)
@@ -1046,61 +1013,6 @@ registerForEvent("onInit", function()
 			refs.nativeSettings = ns
 			logInfo(Text.LOG_DEP_REFERENCED, "Native Settings UI")
 			createNativeMenu()
-		end
-
-		local ct = GetMod("CyberTrials")
-		if type(ct) == "table" then
-			refs.cyberTrials = ct
-			logInfo(Text.LOG_DEP_REFERENCED, "Cyber Trials")
-
-			---Checks if the current race is completed.
-			---Requires `CyberTrials-Patch.bat` to inject `raceLogicHook`.
-			---@return boolean # Checks if the race has been completed based on current and total checkpoints.
-			ct.isRaceCompletedHook = function()
-				if not ct.isPatched then return true end
-				if not ct.raceActive then return false end
-				local current = get(ct.raceLogicHook, "cpNumber") or 0
-				local total = get(ct.raceLogicHook, "track", "totalCheckpoints") or 0
-				return abs(current - total) < 1e-4
-			end
-
-			---Reads the 'back to start' option from user settings.
-			---Requires `CyberTrials-Patch.bat` to inject `userHook`.
-			---@return boolean # Returns true if the user setting 'backToStartOnFinish' is enabled.
-			ct.backToStartOnFinishHook = function()
-				if not ct.isPatched then return false end
-				return (get(ct.userHook, "settings", "backToStartOnFinish") or false) == true
-			end
-
-			---Retrieves the current race track name from the active race logic.
-			---Requires `CyberTrials-Patch.bat` to inject `raceLogicHook`.
-			---@return string? # The current track name, or nil if not available.
-			ct.getTrackName = function()
-				if not ct.isPatched then return nil end
-				return get(ct.raceLogicHook, "track", "name")
-			end
-
-			---Retrieves the best recorded race time for a given track.
-			---Requires `CyberTrials-Patch.bat` to inject `userHook`.
-			---@param name string # The track name used to look up recorded times.
-			---@return number # The best recorded time in milliseconds, or infinity if unavailable.
-			ct.getBestTimeHook = function(name)
-				if not ct.isPatched or not name then return math.huge end
-				local times = get(ct.userHook, "recentTimes") or {}
-				local current = times[name]
-				if current then
-					table.sort(current, function(a, b)
-						return a.totalMillisecs < b.totalMillisecs
-					end)
-					if current[1] then
-						local ms = current[1].totalMillisecs
-						return ms > 1 and ms or math.huge
-					end
-				end
-				return math.huge
-			end
-		else
-			refs.cyberTrials = { raceActive = false }
 		end
 	end)
 end)
