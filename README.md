@@ -15,7 +15,6 @@ Every race becomes more energetic, more atmospheric, and far more satisfying —
 - Optional JSON playlists for linking music from other mods (e.g., RadioExt)
 - Default fallback outros included
 - Works with all vanilla street race events
-- Supports **CyberTrials** (requires compatibility patch)
 
 ---
 
